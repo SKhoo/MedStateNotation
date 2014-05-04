@@ -1,0 +1,302 @@
+\-------------------------------------------------------------------------
+\A1 Nosepoke Beer Program
+\Version: 3.0
+\Created by Shaun Khoo (26 February 2013)
+\Adapted from Michael Cowen's A3 Double Lever Rat (Lawrence Lab)
+\And Mel's FR-1 Schedule (McNally Lab)
+\ <3 >('.')< <3
+\-------------------------------------------------------------------------
+
+\Inputs:
+^LeftNose = 1
+^RightNose = 2
+^Magazine = 3
+
+\Outputs:
+^LeftStimLight = 1
+^RightStimLight = 2
+^HouseLight = 7
+^Pump = 8
+
+\Z-Pulses
+^Timeout = 1
+^PumpIsOff = 2
+^EndTimeout = 3
+^Shutdown = 4
+^Ignition = 5
+
+\VARIABLES
+\VARIABLES - DATA
+\VARIABLES - DATA - A Array = Session Totals
+DIM A = 11
+\Left Nosepokes = A(0)
+\Right Nosepokes = A(1)
+\Magazine Entries = A(2)
+\Total Deliveries = A(3)
+\Left Nosepokes During Pump Operation = A(4)
+\Left Nosepokes During Timeout = A(5)
+\Right Nosepokes During Pump Operation = A(6)
+\Right Nosepokes During Timeout = A(7)
+\Latency to First Left Nosepoke = A(8)
+\Latency to First Right Nosepoke = A(9)
+\Latency to First Magazine Entry = A(10)
+\Latency to First Delivery = A(11)
+
+\VARIABLES - DATA - Response IRTs for Graphing with SOFTCR3
+DIM B = 5000	\All events, subscript M
+
+\VARIABLES - DATA - Timecourse Arrays
+DIM C = 5000	\Left Nosepokes, subscript N
+DIM D = 5000	\Right Nosepokes, subscript O
+DIM E = 5000	\Magazine Entries, subscript P
+DIM F = 5000	\Deliveries, subscript Q
+DIM G = 5000	\Left Nosepokes During Timeout, subscript R
+DIM H = 5000	\Right Nosepokes During Timeout, subscript S
+
+\VARIABLES - DATA - Timebin Arrays
+DIM I = 100	\Left Nosepokes, subscript T
+DIM J = 100	\Right Nosepokes, subscript T
+DIM K = 100	\Magazine Entries subscript T
+DIM L = 100	\Deliveries, subscript T
+
+\VARIABLES - CONTROL
+DIM Y = 7
+var_alias Session Length (min) = Y(0)
+var_alias Fixed Ratio = Y(1)
+var_alias Timeout = Y(2)
+var_alias Maximum Deliveries = Y(3)
+var_alias Pump Operation Time = Y(4)
+var_alias No of Timebins = Y(5)
+var_alias Context Identity = Y(6)
+var_alias Program Version = Y(7)
+
+DIM X = 5
+\X(0) = Re-zeroing left response counter
+\X(1) = Session Clock (in seconds)
+\X(2) = Post-Pump Operation Timeout
+\X(3) = Millisecond clock
+\X(4) = Timebin clock
+\X(5) = IRT clock
+
+DISKVARS = A, B, C, D, E, F, G, H, I, J, K, L, Y
+DISKOPTIONS = FULLHEADERS
+DISKCOLUMNS = 1
+Y2KCOMPLIANT
+
+\-------------------------------------------------------------------------
+\State Set 1 - Control Program
+
+S.S.1,
+S1,	\State 1 establishes default parameters (60 mins, FR1)
+	0.1": SET A(0) = 0, A(1) = 0, A(2) = 0, A(3) = 0, A(4) = 0;
+	SET A(5) = 0, A(6) = 0, A(7) = 0, A(8) = 3600;
+	SET A(9) = 3600, A(10) = 3600;
+
+	\Set the array subscripts to 0
+	SET M = 0, N = 0, O = 0, P = 0, Q = 0;
+	SET R = 0, S = 0, T = 0;
+
+	\Set the IRT event pen 0 and default latency to 3600 s
+	SET B(M) = 0.50, C(N) = 3600, D(O) = 3600, E(P) = 3600;
+	SET F(Q) = 3600, G(R) = 3600, H(S) = 3600;
+	
+	\Set the first timebin value to 0 and shift the IRT
+	SET I(T) = 0, J(T) = 0, K(T) = 0, L(T) = 0; ADD M;
+
+	\Seal all the arrays
+	SET B(M) = -987.987, C(N+1) = -987.987, D(O+1) = -987.987;
+	SET E(P+1) = -987.987, F(Q+1) = -987.987, G(R+1) = -987.987;
+	SET H(S+1) = -987.987, I(T+1) = -987.987, J(T+1) = -987.987;
+	SET K(T+1) = -987.987, L(T+1) = -987.987;
+
+	\Set the default control variables
+	SET Y(0) = 60, Y(1) = 1, Y(2) = 24", Y(3) = 5000, Y(4) = 6";
+	SET Y(5) = 6, Y(7) = 3, X(0) = 0, X(1) = 0, X(2) = Y(2) - Y(4);
+	SET X(3) = 0, X(4) = 0;
+	
+	\Show the control variables
+	SHOW 1, Session Length (min), Y(0);
+	SHOW 2, Fixed Ratio, Y(1);
+	SHOW 3, Timeout, Y(2);
+	SHOW 4, Pump Operation Time, Y(4);
+	SHOW 5, No. of Timebins, Y(5);
+	ON ^RightStimLight ---> S2
+
+S2,	\State 2 responds to the Start or ignition command, turns on house light
+	5": SHOW 1, Session Length (min), Y(0);
+	SHOW 2, Fixed Ratio, Y(1);
+	SHOW 3, Timeout, Y(2);
+	SHOW 4, Pump Operation Time, Y(4);
+	SHOW 5, No. of Timebins, Y(5) ---> SX
+	
+	#START ! #Z^Ignition: SET STARTHOURS = CURRENTHOURS;
+	SET STARTMINUTES = CURRENTMINUTES, STARTSECONDS = CURRENTSECONDS;
+		IF BOX <= 4 [@CONTEXT1, @CONTEXT2]
+		@CONTEXT1: SET Y(6) = 1; ON ^HouseLight, ^LeftStimLight; SET X(2) = Y(2) - Y(4);
+		OFF ^RightStimLight; SHOW 1, Session Time, X(1) ---> S3
+		@CONTEXT2: SET Y(6) = 2; ON ^LeftStimLight; SET X(2) = Y(2) - Y(4);
+		OFF ^RightStimLight; SHOW 1, Session Time, X(1) ---> S3
+
+
+S3, 	\State 3 is the session timer
+	1": ADD X(1); SHOW 1, Session Time, X(1);
+	IF X(1)/60 >= Y(0) [@True, @False]
+		@True: Z^Shutdown ---> S4
+		@False: ---> SX
+
+S4,	\State 4 calculates latencies
+	1": SET A(8) = C(0), A(9) = D(0);
+ 	SET A(10) = E(0), A(11) = F(0) ---> S5
+
+S5,	\State 5 closes the program and writes data to disk
+	1": ---> STOPABORTFLUSH
+
+\-------------------------------------------------------------------------
+\State Set 2 - Left Nosepokes are Active
+
+S.S.2,
+S1,	\State 1 responds to the Start or ignition command
+	#START ! #Z^Ignition: SHOW 2, A0 Left Nose, A(0); SHOW 4, A3 Rewards, A(3);
+	SHOW 6, A5 Timeout LNose, A(5); SET X(0) = 0 ---> S2
+
+S2,	\State 2 records response time, adds to total, timebin, rewards
+	#R^LeftNose: ADD A(0); SET C(N) = X(3); ADD N; SET C(N) = -987.987;
+	ADD I(T); SHOW 2, A0 Left Nose, A(0);
+	\IRT Array
+	SET B(M) = X(5) + 0.50, X(5) = 0; ADD M; SET B(M) = 0.60;
+	ADD M; SET B(M) = -987.987;
+
+	ADD X(0); IF (X(0) >= Y(1)) AND (A(3) < Y(3)) [@True, @False]
+		@True: ADD A(3);
+			SET F(Q) = X(3); ADD Q; SET F(Q) = -987.987;
+			ADD L(T); SET X(0) = 0; 
+			ON ^Pump; Z^Timeout; OFF ^LeftStimLight;
+			SHOW 4, A3 Rewards, A(3);
+			SET B(M) = 0.2; ADD M; SET B(M) = -987.987 ---> S3
+		@False: ---> SX
+	#Z^Shutdown: ---> S1
+
+S3,	\State 3 records responses while the pump is on
+	\The pump operates during the timeout period
+	#R^LeftNose: ADD A(0); SET C(N) = X(3); ADD N; SET C(N) = -987.987;
+	ADD I(T); SHOW 2, A0 Left Nose, A(0); ADD A(4);
+	ADD A(5); SET G(R) = X(3); ADD R; SET G(R) = -987.987;
+	SHOW 6, A5 Timeout LNose, A(5);  
+	\IRT Array
+	SET B(M) = X(5) + 0.50, X(5) = 0; ADD M; SET B(M) = 0.60;
+	ADD M; SET B(M) = -987.987 ---> SX
+
+	#Z^Shutdown: OFF ^Pump ---> S1
+	Y(4)#T: OFF ^Pump; Z^PumpIsOff ---> S4
+
+S4,	\State 4 records responses during timeout, while pump is not on
+	#R^LeftNose: ADD A(0); SET C(N) = X(3); ADD N; SET C(N) = -987.987;
+	ADD I(T); SHOW 2, A0 Left Nose, A(0);
+	ADD A(5); SET G(R) = X(3); ADD R; SET G(R) = -987.987;
+	SHOW 6, A5 Timeout LNose, A(5);
+	\IRT Array
+	SET B(M) = X(5) + 0.50, X(5) = 0; ADD M; SET B(M) = 0.60;
+	ADD M; SET B(M) = -987.987;---> SX
+
+	#Z^Shutdown: ---> S1
+	X(2)#T: ON ^LeftStimLight; Z^EndTimeout ---> S2
+
+\-------------------------------------------------------------------------
+\State Set 3 - Right Nosepokes are Inactive
+
+S.S.3,
+S1,	\State 1 responds to the Start or ignition command
+	#START ! #Z^Ignition: SHOW 3, A1 Right Nose, A(1) ---> S2
+
+S2,	\State 2 records response time, adds to total responses
+	#R^RightNose: ADD A(1); SET D(O) = X(3); ADD O; SET D(O) = -987.987;
+	ADD J(T); SHOW 3, A1 Right Nose, A(1);
+	\IRT Array
+	SET B(M) = X(5) + 0.1, X(5) = 0; ADD M; SET B(M) = -987.987 ---> SX
+	#Z^Timeout: ---> S3
+	#Z^Shutdown: ---> S1	
+
+S3,	\State 3 records responses while the pump is on
+	#R^RightNose: ADD A(1); SET D(O) = X(3); ADD O; SET D(O) = -987.987;
+	ADD J(T); SHOW 3, A1 Right Nose, A(1);
+	ADD A(6); ADD A(7); SET H(S) = X(3); ADD S; 
+	SET H(S) = -987.987;
+	\IRT Array
+	SET B(M) = X(5) + 0.1, X(5) = 0; ADD M; SET B(M) = -987.987---> SX
+	#Z^PumpIsOff: ---> S4
+	#Z^Shutdown: ---> S1
+
+S4,	\State 4 records responses during timeout, while pump is not on
+	#R^RightNose: ADD A(1); SET D(O) = X(3); ADD O; SET D(O) = -987.987;
+	ADD J(T); SHOW 3, A1 Right Nose, A(1);
+	ADD A(7); SET H(S) = X(3); ADD S; 
+	SET H(S) = -987.987;
+	\IRT Array
+	SET B(M) = X(5) + 0.1, X(5) = 0; ADD M; SET B(M) = -987.987 ---> SX
+	#Z^EndTimeout: ---> S2
+	#Z^Shutdown: ---> S1
+
+\-------------------------------------------------------------------------
+\State Set 4 - Magazine Entries
+
+S.S.4,
+S1,	\State 1 responds to the Start command
+	#START ! #Z^Ignition: SHOW 5, A2 Mag Entries, A(2) ---> S2
+
+S2,	\State 2 records response time, adds to totals, timebin
+	#R^Magazine: ADD A(2); SHOW 5, A2 Mag Entries, A(2);
+	SET E(P) = X(3); ADD P; SET E(P) = -987.987;
+	ADD K(T) ---> SX
+	#Z^Shutdown: ---> S1
+
+\-------------------------------------------------------------------------
+\State Set 5 - Millisecond Timer, not for display or printing
+
+S.S.5,
+S1,	\State 1 starts the clock
+	#START ! #Z^Ignition: ---> S2
+
+S2,	\State 2 counts upwards in 100 ms increments
+	\Incorporates the timebin shifter and the IRT clock
+	0.1": SET X(3) = X(3) + 0.1; ADD X(5);
+	SET X(4) = X(4) + 0.1; 
+	IF (X(4) / 60 >= (Y(0) / Y(5))) AND ((T + 1) < Y(5)) [@TRUE, @FALSE]
+		@TRUE: SET X(4) = 0; ADD T;
+		SET I(T) = 0, J(T) = 0, K(T) = 0, L(T) = 0;
+		SET I(T+1) = -987.987;
+		SET J(T+1) = -987.987;
+		SET K(T+1) = -987.987;
+		SET L(T+1) = -987.987 ---> SX
+		@FALSE: ---> SX
+	#Z^Shutdown: ---> S1
+
+\-------------------------------------------------------------------------
+\State Set 6 - Pre-program flush & right nosepoke ignition sequence
+
+S.S.6,
+S1,	\The option to run the pump will be disabled by program start
+	#R^LeftNose: ON ^Pump ---> S2
+	#START: ---> S3
+	#R^RightNose: Z^Ignition ---> S3
+
+S2,	
+	20": OFF ^Pump ---> S1
+	#START: OFF ^Pump ---> S3
+
+S3,	
+	#Z^Shutdown: SHOW 12, Program Version, Y(7);
+	SHOW 13, Written By, Y(7);
+	SHOW 14, Shaun Khoo, Y(7);
+	SHOW 15, ORCID 0000-0002-0972-3788, Y(7) ---> SX
+
+\-------------------------------------------------------------------------
+\Changelog (YYYY-MM-DD):
+\Version 1.1 (2013-04-01): Fixed potential bug in pre-program flush
+\Y2K compliant.
+\Named Z-Pulses.
+\Version 1.2 (2013-04-02): Added right nosepoke ignition sequence.
+\Version 1.3 (2013-04-03): Fixed timebin shifter to remove redundant extra
+\timebin. Changed timeout + pump calculation so it occurs after start.
+\Version 2.1 (2013-07-26): Converted program into multicontext program.
+\Version 3.0 (2013-08-20): Set start time to session start rather than
+\program loading time.

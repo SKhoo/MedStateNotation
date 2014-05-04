@@ -1,0 +1,240 @@
+\-------------------------------------------------------------------------
+\A2 Magazine Training Program
+\Version: 3.0
+\Created by Shaun Khoo (1 April 2013)
+\Adapted from Michael Cowen's A3 Double Lever Rat (Lawrence Lab)
+\And Magazine Training Program (McNally Lab)
+\ <3 >('.')< <3
+\-------------------------------------------------------------------------
+
+\Inputs:
+^LeftNose = 1
+^RightNose = 2
+^Magazine = 3
+
+\Outputs:
+^RightStimLight = 2
+^HouseLight = 7
+^Pump = 8
+
+\Z-Pulse
+^Shutdown = 1
+^Ignition = 2
+
+\VARIABLES
+\VARIABLES - DATA
+\VARIABLES - DATA - A Array = Session Totals
+DIM A = 6
+var_alias Left Nosepokes = A(0)
+var_alias Right Nosepokes = A(1)
+var_alias Magazine Entries = A(2)
+var_alias Total Deliveries = A(3)
+var_alias Latency to First Left Nosepoke = A(4)
+var_alias Latency to First Right Nosepoke = A(5)
+var_alias Latency to First Magazine Entry = A(6)
+
+\VARIABLES - DATA - Timecourse Arrays
+DIM B = 5000	\Left Nosepokes, subscript J
+DIM C = 5000	\Right Nosepokes, subscript K
+DIM D = 5000	\Magazine Entries, subscript L
+DIM E = 5000	\Deliveries, subscript M
+
+\VARIABLES - DATA - Timebin Arrays
+DIM F = 100	\Left Nosepokes, subscript T
+DIM G = 100	\Right Nosepokes, subscript T
+DIM H = 100	\Magazine Entries subscript T
+DIM I = 100	\Deliveries, subscript T
+
+\VARIABLES - CONTROL
+DIM Y = 5
+var_alias Session Length (min) = Y(0)
+var_alias Maximum Deliveries = Y(1)
+var_alias Pump Operation Time = Y(2)
+var_alias No of Timebins = Y(3)
+var_alias Context Identity = Y(4)
+var_alias Program Version = Y(5)
+
+DIM X = 3
+\X(0) = Time until next delivery
+\X(1) = Session Clock (in seconds)
+\X(2) = Millisecond clock
+\X(3) = Timebin clock
+
+LIST Z = 108, 126, 92, 139, 86, 144, 79, 134, 69, 163
+\ Time intervals between each trial
+
+DISKVARS = A, B, C, D, E, F, G, H, I, Y, Z
+DISKOPTIONS = FULLHEADERS
+DISKCOLUMNS = 1
+Y2KCOMPLIANT
+
+
+\-------------------------------------------------------------------------
+\State Set 1 - Control Program
+
+S.S.1,
+S1,	\State 1 establishes default parameters (20 mins)
+	0.1": SET A(0) = 0, A(1) = 0, A(2) = 0, A(3) = 0, A(4) = 1500;
+	SET A(5) = 1500, A(6) = 1500;
+
+	\Set the array subscripts to 0
+	SET J = 0, K = 0, L = 0, M = 0, T = 0;
+
+	\Set the default latency to 1500
+	SET B(J) = 1500, C(K) = 1500, D(L) = 1500, E(M) = 1500;
+	
+	\Set the first timebin value to 0
+	SET F(T) = 0, G(T) = 0, H(T) = 0, I(T) = 0;
+
+	\Seal all the arrays
+	SET B(J+1) = -987.987, C(K+1) = -987.987, D(L+1) = -987.987;
+	SET E(M+1) = -987.987;
+
+	\Set the default control variables
+	SET Y(0) = 20, Y(1) = 20, Y(2) = 6", Y(3) = 4, Y(5) = 3;
+	RANDD X(0) = Z; SET X(1) = 0, X(2) = 0, X(3) = 0;
+	
+	\Show the control variables
+	SHOW 1, Session Length (min), Y(0);
+	SHOW 2, Maximum Deliveries, Y(1);
+	SHOW 3, Pump Operation Time, Y(2);
+	SHOW 4, Next Delivery, X(0);
+	SHOW 5, No. of Timebins, Y(3);
+	ON ^RightStimLight ---> S2
+
+S2,	\State 2 responds to the Start or ignition command, turns on house light
+	5": SHOW 1, Session Length (min), Y(0);
+	SHOW 2, Maximum Deliveries, Y(1);
+	SHOW 3, Pump Operation Time, Y(2);
+	SHOW 4, Next Delivery, X(0);
+	SHOW 5, No. of Timebins, Y(3) ---> SX
+
+	#START ! #Z^Ignition: SET STARTHOURS = CURRENTHOURS;
+	SET STARTMINUTES = CURRENTMINUTES, STARTSECONDS = CURRENTSECONDS;
+		IF BOX <= 4 [@CONTEXT1, @CONTEXT2]
+		@CONTEXT1: SET Y(4) = 1; ON ^HouseLight; 
+		OFF ^RightStimLight; SHOW 1, Session Time, X(1) ---> S3
+		@CONTEXT2: SET Y(4) = 2;
+		OFF ^RightStimLight; SHOW 1, Session Time, X(1) ---> S3
+
+S3, 	\State 3 is the session timer
+	1": ADD X(1); SHOW 1, Session Time, X(1); SUB X(0);
+	SHOW 6, Next Delivery, X(0);
+	IF X(1)/60 >= Y(0) [@True, @False]
+		@True: Z^Shutdown ---> S4
+		@False: ---> SX
+
+S4,	\State 4 calculates latencies
+	0.01": SET A(4) = B(0), A(5) = C(0);
+ 	SET A(6) = D(0) ---> S5
+
+S5,	\State 5 closes the program and writes data to disk
+	1": ---> STOPABORTFLUSH
+
+\-------------------------------------------------------------------------
+\State Set 2 - Data Collection
+
+S.S.2,
+S1,	\State 1 responds to the Start command
+	#START ! #Z^Ignition: SHOW 2, Mag Entries 0-5min, H(0);
+	SHOW 3, Mag Entries 5-10min, H(1);
+	SHOW 4, Mag Entries 10-15min, H(2);
+	SHOW 5, Mag Entries 15-20min, H(3) ---> S2
+
+S2,	\State 2 records response times, adds to total, timebin
+
+	#R^LeftNose: ADD A(0); SET B(J) = X(2); ADD J; SET B(J) = -987.987;
+	ADD F(T) ---> SX
+
+	#R^RightNose: ADD A(1); SET C(K) = X(2); ADD K; SET C(K) = -987.987;
+	ADD G(T) ---> SX
+
+	#R^Magazine: ADD A(2); SET D(L) = X(2); ADD L; SET D(L) = -987.987;
+	ADD H(T); SHOW 2, Mag Entries 0-5min, H(0);
+	SHOW 3, Mag Entries 5-10min, H(1);
+	SHOW 4, Mag Entries 10-15min, H(2);
+	SHOW 5, Mag Entries 15-20min, H(3) ---> SX
+
+	#Z^Shutdown: ---> S1
+
+\-------------------------------------------------------------------------
+\State Set 3 - Millisecond Timer, not for display or printing
+
+S.S.3,
+S1,	\State 1 starts the clock
+	#START ! #Z^Ignition: ---> S2
+
+S2,	\State 2 counts upwards in 100 ms increments
+	\Incorporates the timebin shifter
+	0.1": SET X(2) = X(2) + 0.1;
+	SET X(3) = X(3) + 0.1; 
+	IF (X(3) / 60 >= (Y(0) / Y(3))) AND ((T + 1) < Y(3)) [@TRUE, @FALSE]
+		@TRUE: SET X(3) = 0; ADD T;
+		SET F(T) = 0, G(T) = 0, H(T) = 0, I(T) = 0;
+		SHOW 2, Mag Entries 0-5min, H(0);
+		SHOW 3, Mag Entries 5-10min, H(1);
+		SHOW 4, Mag Entries 10-15min, H(2);
+		SHOW 5, Mag Entries 15-20min, H(3) ---> SX
+		@FALSE: ---> SX
+	#Z^Shutdown: ---> S1
+
+\-------------------------------------------------------------------------
+\State Set 4 - Delivery Operation
+
+S.S.4,
+S1,	\State 1 responds to the start command
+	#START ! #Z^Ignition: ---> S2
+
+S2,	\State 2 checks the time until next delivery X(0) and responds
+	1": SHOW 6, Next Delivery, X(0); 
+	IF (X(0) <= 0) AND (A(3) < Y(1)) [@TRUE, @FALSE]
+		@TRUE: RANDD X(0) = Z; ON ^Pump;
+		ADD A(3); SET E(M) = X(2); ADD M; SET E(M) = -987.987;
+		ADD I(T); SHOW 7, A3 Deliveries, A(3) ---> S3
+		@FALSE: ---> SX
+	#Z^Shutdown: SET X(0) = 0 ---> S1
+
+S3,	\State 3 switches off the pump
+	Y(2)#T: OFF ^Pump ---> S2
+	#Z^Shutdown: OFF ^Pump; SET X(0) = 0;
+	SHOW 6, Next Delivery, X(0) ---> S1
+
+\-------------------------------------------------------------------------
+\State Set 5 - Pre-program flush & right nosepoke ignition sequence
+
+S.S.5,
+S1,	\The option to run the pump will be disabled by program start
+	#R^LeftNose: ON ^Pump ---> S2
+	#START: SET N = Y(3); SET F(N) = -987.987, G(N) = -987.987;
+		SET H(N) = -987.987, I(N) = -987.987 ---> S3
+	#R^RightNose: Z^Ignition; SET N = Y(3); SET F(N) = -987.987;
+		SET G(N) = -987.987, H(N) = -987.987;
+		SET I(N) = -987.987 ---> S3
+
+S2,	
+	20": OFF ^Pump ---> S1
+	#START: OFF ^Pump; SET N = Y(3); SET F(N) = -987.987;
+		SET G(N) = -987.987, H(N) = -987.987;
+		SET I(N) = -987.987 ---> S3
+
+S3,	\Holding state. Also periodically updates non-essential data.
+	5": IF L >= 1 [@TRUE, @FALSE]
+		@TRUE: SHOW 8, Last Mag Entry, D(L-1);
+			SHOW 9, Left Nosepokes, A(0);
+			SHOW 10, Right Nosepokes, A(1) ---> SX
+		@FALSE: SHOW 9, Left Nosepokes, A(0);
+			SHOW 10, Right Nosepokes, A(1) ---> SX
+
+\-------------------------------------------------------------------------
+\Changelog (YYYY-MM-DD):
+\Version 1.0 (2013-04-01): This is a modified A1 Nosepoke Beer Program.
+\Version 1.1 (2013-04-02): Added right nosepoke ignition sequence.
+\Version 1.2 (2013-04-03): Fixed timebin shifter.
+\Version 1.3 (2013-04-11): Pre-sealed timebin arrays upon program start.
+\This change ensures that the timebin displays are never -987.99.
+\Version 1.4 (2013-04-19): Fixed List Z so that the inter-delivery time
+\totals to 1140 s (19 min) so that 10 deliveries will be made
+\during a 20 min session.
+\Version 2.1 (2013-07-26): Converted program into a multicontext program.
+\Version 3.0 (2013-08-20): Set start time to session start rather than
+\program loading time.
