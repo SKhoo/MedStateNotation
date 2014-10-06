@@ -1,6 +1,6 @@
 \-------------------------------------------------------------------------
 \ A0 Operant Self-Administration
-\ Version: 1.31
+\ Version: 1.33
 \ Created by Shaun Khoo (28 June 2014)
 \ >('.')<
 \ http://orcid.org/0000-0002-0972-3788
@@ -47,7 +47,7 @@
 ^DefaultShortBin = 4	\Default number of timebins (magazine)
 ^DefaultHighMax = 5000	\Default maximum number of deliveries (acquisition)
 ^DefaultLowMax = 10	\Default maximum number of deliveries (magazine)
-^Version = 131		\Program version x100
+^Version = 133		\Program version x100
 
 \VARIABLES
 \VARIABLES - DATA - Session Totals
@@ -608,7 +608,7 @@ S2,	\State 2 counts upwards in 10 ms increments
 	#Z^Shutdown: ---> S1
 
 S3,	\State 3 counts upwards in 10ms increments but does not seal the timebin arrays	
-	0.1": SET X(1) = X(1) + 0.01;
+	0.01": SET X(1) = X(1) + 0.01;
 	SET X(2) = X(2) + 0.01; 
 	IF (X(2) / 60 >= (Z(0) / Z(5))) AND ((T + 1) < Z(5)) [@TRUE, @FALSE]
 		@TRUE: SET X(2) = 0; ADD T;
