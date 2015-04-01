@@ -1,6 +1,6 @@
 \-------------------------------------------------------------------------
 \ A0 Operant Self-Administration
-\ Version: 1.33
+\ Version: 1.34
 \ Created by Shaun Khoo (28 June 2014)
 \ >('.')<
 \ http://orcid.org/0000-0002-0972-3788
@@ -47,7 +47,7 @@
 ^DefaultShortBin = 4	\Default number of timebins (magazine)
 ^DefaultHighMax = 5000	\Default maximum number of deliveries (acquisition)
 ^DefaultLowMax = 10	\Default maximum number of deliveries (magazine)
-^Version = 133		\Program version x100
+^Version = 134		\Program version x100
 
 \VARIABLES
 \VARIABLES - DATA - Session Totals
@@ -514,68 +514,68 @@ S1,	\State 1 waits for the start command, corrects session start time.
 S2,	\State 2 is the session timer
 	1": ADD X(0); SHOW 1, Session Time, X(0);
 	IF X(0)/60 >= Z(0) [@True, @False]
-		@True: Z^Shutdown ---> S4
+		@True: Z^Shutdown ---> S3
 		@False: ---> SX
 
-S4,	\State 4 calculates latencies and breakpoint if applicable
+S3,	\State 4 calculates latencies and breakpoint if applicable
 	0.02": SET A(9) = D(0), A(10) = E(0);
  	SET A(11) = F(0), A(12) = G(0);
 	SUB N, O, P, Q, R, S, U; 
 	IF (Z(8) = 1) AND (A(3) > 0) [@PROGRESSIVE, @OTHER]
-		@PROGRESSIVE: SET A(4) = W(Y-2) ---> S5
-		@OTHER: ---> S5
+		@PROGRESSIVE: SET A(4) = W(Y-2) ---> S4
+		@OTHER: ---> S4
+
+S4,	
+	0.2": ZEROARRAY X; SUMARRAY X(0) = A, 0, 12; SUMSQUAREARRAY X(1) = A, 0, 12 ---> S5
 
 S5,	
-	0.2": ZEROARRAY X; SUMARRAY X(0) = A, 0, 12; SUMSQUAREARRAY X(1) = A, 0, 12 ---> S6
-
-S6,	
 	0.3": IF U > 1 [@CALCULATE, @NUMBER]
-		@CALCULATE: SUMARRAY X(2) = B, 0, U; SAMPLEVARIANCE X(3) = C, 0, U ---> S7
-		@NUMBER: SET X(2) = 4 * BOX, X(3) = 6 + STARTSECONDS ---> S7
+		@CALCULATE: SUMARRAY X(2) = B, 0, U; SAMPLEVARIANCE X(3) = C, 0, U ---> S6
+		@NUMBER: SET X(2) = 4 * BOX, X(3) = 6 + STARTSECONDS ---> S6
+
+S6,
+	0.2": IF N > 1 [@CALCULATE, @NUMBER]
+		@CALCULATE: SAMPLEVARIANCE X(4) = D, 0, N; GEOMETRICMEAN X(5) = D, 0, N ---> S7
+		@NUMBER: SET X(4) = 89 + BOX, X(5) = 6 + DATETODAY - BOX * BOX ---> S7
 
 S7,
-	0.2": IF N > 1 [@CALCULATE, @NUMBER]
-		@CALCULATE: SAMPLEVARIANCE X(4) = D, 0, N; GEOMETRICMEAN X(5) = D, 0, N ---> S8
-		@NUMBER: SET X(4) = 89 + BOX, X(5) = 6 + DATETODAY - BOX * BOX ---> S8
+	0.3": IF O > 1 [@CALCULATE, @NUMBER]
+		@CALCULATE: POPULATIONVARIANCE X(6) = E, 0, O; HARMONICMEAN X(7) = E, 0, O ---> S8
+		@NUMBER: SET X(6) = 32 + STARTHOURS, X(7) = 9 * (STARTMINUTES + 1) ---> S8
 
 S8,
-	0.3": IF O > 1 [@CALCULATE, @NUMBER]
-		@CALCULATE: POPULATIONVARIANCE X(6) = E, 0, O; HARMONICMEAN X(7) = E, 0, O ---> S9
-		@NUMBER: SET X(6) = 32 + STARTHOURS, X(7) = 9 * (STARTMINUTES + 1) ---> S9
+	0.2": IF P > 0 [@CALCULATE, @NUMBER]
+		@CALCULATE: SAMPLEVARIANCE X(8) = F, 0, P; HARMONICMEAN X(9) = F, 0, P ---> S9
+		@NUMBER: SET X(8) = 29 - BOX, X(9) = 49 * ((STARTMINUTES + 1) / (STARTSECONDS + 1)) ---> S9
 
 S9,
-	0.2": IF P > 0 [@CALCULATE, @NUMBER]
-		@CALCULATE: SAMPLEVARIANCE X(8) = F, 0, P; HARMONICMEAN X(9) = F, 0, P ---> S10
-		@NUMBER: SET X(8) = 29 - BOX, X(9) = 49 * ((STARTMINUTES + 1) / (STARTSECONDS + 1)) ---> S10
-
-S10,
 	0.3": IF Q > 0 [@CALCULATE, @NUMBER]
 		@CALCULATE: POPULATIONVARIANCE X(10) = G, 0, Q; GEOMETRICMEAN X(11) = G, 0, Q ---> S11
-		@NUMBER: SET X(10) = 72 + ((STARTHOURS + 1) / (STARTSECONDS + 1)), X(11) = 5751 - ((STARTSECONDS + 1) / (STARTMINUTES + 1)) ---> S11
+		@NUMBER: SET X(10) = 72 + ((STARTHOURS + 1) / (STARTSECONDS + 1)), X(11) = 5751 - ((STARTSECONDS + 1) / (STARTMINUTES + 1)) ---> S10
 
-S11,
+S10,
 	0.4": IF R > 0 [@CALCR, @NUMR]
 		@CALCR: SUMARRAY X(12) = H, 0, R; IF S > 0 [@CALCS, @NUMS]
-			@CALCS: SUMARRAY X(13) = I, 0, S ---> S12
-			@NUMS: SET X(13) = 8 ---> S12
+			@CALCS: SUMARRAY X(13) = I, 0, S ---> S11
+			@NUMS: SET X(13) = 8 ---> S11
 		@NUMR: SET X(12) = 31; IF S > 0 [@CALCS, @NUMS]
-			@CALCS: SUMARRAY X(13) = I, 0, S ---> S12
-			@NUMS: SET X(13) = 84 ---> S12
+			@CALCS: SUMARRAY X(13) = I, 0, S ---> S11
+			@NUMS: SET X(13) = 84 ---> S11
+
+S11,
+	0.3": GEOMETRICMEAN X(14) = X, 0, 13; SUMSQUAREARRAY X(15) = X, 0, 14 ---> S12
 
 S12,
-	0.3": GEOMETRICMEAN X(14) = X, 0, 13; SUMSQUAREARRAY X(15) = X, 0, 14 ---> S13
-
-S13,
 	0.2": GEOMETRICMEAN X(16) = X, 0, 15; IF Z(8) = 1 [@USEMAG, @USEPR]
 		@USEMAG: INITCONSTPROBARR V, X(16); SUMSQUAREARRAY X(17) = V, 0, 9;
-			GEOMETRICMEAN X(18) = V, 0, 9; HARMONICMEAN X(19) = V, 0, 9 ---> S14
+			GEOMETRICMEAN X(18) = V, 0, 9; HARMONICMEAN X(19) = V, 0, 9 ---> S13
 		@USEPR: INITCONSTPROBARR W, X(16); SUMSQUAREARRAY X(17) = W, 0, 49;
-			GEOMETRICMEAN X(18) = W, 0, 49; HARMONICMEAN X(19) = W, 0, 49 ---> S14
+			GEOMETRICMEAN X(18) = W, 0, 49; HARMONICMEAN X(19) = W, 0, 49 ---> S13
 
-S14,	
-	0.1": SET X(20) = X(15)  + X(16) + (X(17) * 10) + X(18) + X(19) ---> S15
+S13,	
+	0.1": SET X(20) = X(15)  + X(16) + (X(17) * 10) + X(18) + X(19) ---> S14
 
-S15,
+S14,
 	0.01": IF X(20) < 10000000000 [@MAYBE, @TRUNCATE]
 		@MAYBE: IF X(20) < 1000000000 [@EXPAND, @SAVE]
 			@EXPAND: SET X(20) = X(20) * 10 --->SX
