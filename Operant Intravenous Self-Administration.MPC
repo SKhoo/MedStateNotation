@@ -1,0 +1,1000 @@
+\-------------------------------------------------------------------------
+\ Operant Intravenous Self-Administration
+\ Version: 1.01
+\ Created by Shaun Khoo (1 April 2015)
+\ >('.')<
+\ http://orcid.org/0000-0002-0972-3788
+\-------------------------------------------------------------------------
+
+\CONSTANTS
+\INPUTS
+^LeftNose = 1
+^RightNose = 2
+^Magazine = 3
+^ActivityOne = 4	\Closest to wall with nosepokes
+^ActivityTwo = 5
+^ActivityThree = 6
+^ActivityFour = 7
+^Button = 8		\The start button attached to the chamber
+
+\OUTPUTS
+^LeftStimLight = 1
+^RightStimLight = 2
+^LiquidDispenser = 3	\Not used in this program
+^Fan = 4
+^HouseLight = 7
+^Pump = 8
+
+\Z-PULSES
+^Ignition = 1
+^Timeout = 2
+^AutoTimeout = 3
+^PumpIsOff = 4
+^EndTimeout = 5
+^PostMax = 6
+^Shutdown = 7
+
+\K-PULSES - To be issued by the user to establish certain default parameters or session types
+^Habituation = 1
+^Acquisition = 2
+^ProgressiveRatio = 3
+^Extinction = 4
+^CueReinstate = 5
+
+\CONTROL CONSTANTS
+^LongSession = 60	\Standard session length in minutes
+^DefaultFR = 1		\Default Fixed Ratio
+^DefaultTimeout = 23	\Default timeout period in seconds
+^DefaultPump = 3	\Default pump operation time in seconds
+^DefaultLongBin = 30	\Default number of timebins (acquisition)
+^DefaultShortBin = 15	\Default number of timebins (magazine)
+^DefaultMax = 100	\Default maximum number of deliveries (acquisition)
+^AutoCue = 600		\Time until automatic reinstatement cue presentation (s)
+^Version = 101		\Program version x100
+
+\VARIABLES
+\VARIABLES - DATA - Session Totals
+DIM A = 31
+\Active Nosepokes = A(0)
+\Inactive Nosepokes = A(1)
+\Magazine Entries = A(2)
+\Infusions = A(3)
+\Breakpoint = A(4)
+\Total Activity = A(5)
+\Active Nosepokes During Pump Operation = A(6)
+\Active Nosepokes During Timeout = A(7)
+\Inactive Nosepokes During Pump Operation = A(8)
+\Inactive Nosepokes During Timeout = A(9)
+\Latency to First Active Nosepokes = A(10)
+\Latency to First Inactive Nosepoke = A(11)
+\Latency to First Magazine Entry = A(12)
+\Latency to First Infusion = A(13)
+\Latency to First Locomotor = A(14)
+\ActivityOne Subtotal = A(15)
+\ActivityTwo Subtotal = A(16)
+\ActivityThree Subtotal = A(17)
+\ActivityFour Subtotal = A(18)
+\ActivityOne Latency = A(19)
+\ActivityTwo Latency = A(20)
+\ActivityThree Latency = A(21)
+\ActivityFour Latency = A(22)
+\Post-Max Active Nosepokes = A(23)
+\Post-Max Inactive Nosepokes = A(24)
+\Post-Max Magazine Entries = A(25)
+\Post-Max Total Activity = A(26)
+\Post-Max ActivityOne = A(27)
+\Post-Max ActivityTwo = A(28)
+\Post-Max ActivityThree = A(29)
+\Post-Max ActivityFour = A(30)
+\Post-Max Session End Time = A(31)
+
+\VARIABLES - DATA - Chronicling
+DIM B = 100000		\All event identities,		subscript N
+DIM C = 100000		\All event times,		subscript N
+
+\VARIABLES - DATA - Timecourse Arrays
+DIM D = 100000		\Active Nosepokes,		subscript O
+DIM E = 100000		\Inactive Nosepokes,		subscript P
+DIM F = 100000		\Magazine Entries,		subscript Q
+DIM G = 100000		\Infusions,			subscript R
+DIM H = 100000		\Activity Beam Breaks,		subscript S
+
+\VARIABLES - DATA - Timebin Arrays
+DIM I = 10000		\Active Nosepokes,		subscript T
+DIM J = 10000		\Inactive Nosepokes,		subscript T
+DIM K = 10000		\Magazine Entries,		subscript T
+DIM L = 10000		\Infusions,			subscript T
+DIM M = 10000		\Activity Beam Breaks,		subscript T
+
+\VARIABLES - CONTROL - WORKING VARIABLES
+DIM X = 22
+\X(0) = Session Clock (seconds)
+\X(1) = Decisecond Clock
+\X(2) = Timebin Clock
+\X(3) = Re-zeroing response counter
+\X(4) = Pump Operation Time
+\X(5) = Post-pump Timeout
+\X(6) = Current Ratio
+\X(7) = Active Nosepoke
+\X(8) = Inactive Nosepoke
+
+\VARIABLES - CONTROL - SESSION PARAMETERS
+DIM Z = 13
+var_alias Session Length (min) = Z(0)
+var_alias Fixed Ratio = Z(1)
+var_alias Timeout (s) = Z(2)
+var_alias Maximum Deliveries = Z(3)
+var_alias Pump Operation Time (s) = Z(4)
+var_alias No of Timebins = Z(5)
+var_alias Active Nosepoke (1L2R) = Z(6)
+var_alias Reinstatement Auto Cue (s) = Z(7)
+\Macro Mode = Z(8)
+\Session Type = Z(9)
+\Program Version = Z(10)
+\Digest
+\R
+\D2
+
+LIST V = 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,
+31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60
+
+\VARIABLES - CONTROL - PROGRESSIVE RATIO LIST,		subscript Y
+\Function: Round[5e^(reinforcer number * 0.2) - 5]
+\Reference: Richardson, N. R., & Roberts, D. C. S. (1996). Progressive ratio schedules in drug self-administration 
+\studies in rats: a method to evaluate reinforcing efficacy. Journal of Neuroscience Methods, 66(1), 1-11. 
+\doi: 10.1016/0165-0270(95)00153-0
+LIST W = 1, 2, 4, 6, 9, 12, 15, 20, 25, 32, 40, 50, 62, 77, 95, 118, 
+145, 178, 219, 268, 328, 402, 492, 603, 737, 901, 1102, 1347, 1646, 
+2012, 2459, 3004, 3670, 4484, 5478, 6692, 8175, 9986, 12198, 14900, 
+18200, 22230, 27153, 33166, 40510, 49481, 60437, 73819, 90164, 110127
+
+DISKVARS = A, B, C, D, E, F, G, H, I, J, K, L, M, V, W, Z
+DISKOPTIONS = FULLHEADERS
+DISKFORMAT = 16.3
+DISKCOLUMNS = 1
+Y2KCOMPLIANT
+
+\-------------------------------------------------------------------------
+\State Set 1 - Control Program
+
+S.S.1,
+S1,	\State 1 shows the program has loaded.
+	0.01": SHOW 1, Initialising, Z(8); SET Z(10) = ^Version / 100;
+
+	\Initiliase data array
+	ZEROARRAY, A; SET A(23) = -987.987;
+
+	\Initialise all subscripts
+	SET N = 0, O = 0, P = 0, Q = 0, R = 0, S = 0, T = 0, U = 0, Y = 0;
+
+	\Seal all arrays
+	SET B(N+1) = -987.987, C(N+1) = -987.987;			\Chronicling arrays
+	SET D(O+1) = -987.987, E(O+1) = -987.987, F(Q+1) = -987.987;	\Timestamp recorders
+	SET G(R+1) = -987.987, H(S+1) = -987.987;
+	SET I(T+1) = -987.987, J(T+1) = -987.987, K(T+1) = -987.987;	\Timebin recorders
+	SET L(T+1) = -987.987, M(T+1) = -987.987;
+
+	\Show instructions for manual mode setting
+	SHOW 6, K Pulse Menu, A(0);
+	SET X(9) = ^Habituation, X(10) = ^Acquisition, X(11) = ^ProgressiveRatio;
+	SET X(12) = ^Extinction, X(13) = ^CueReinstate;
+	SHOW 7, Habituation, X(9); SHOW 8, Acquisition, X(10);
+	SHOW 9, Progressive Ratio, X(11); SHOW 10, Extinction, X(12);
+	SHOW 11, Cue Reinstatement, X(13);
+
+	\Turn on the fan
+	ON ^Fan; SET Z(11) = DATETODAY + (BOX * BOX); 
+	IF Z(11) < 100000 [@ENLARGE, @OK]
+		@ENLARGE: SET Z(11) = Z(11) * 100000000000 ---> S2
+		@OK: SET Z(11) = Z(11) * 10000000000 ---> S2
+
+S2,	\State 2 checks for macro initialisation
+	0.5": IF Z(8) > 9 [@ALLMACRO, @NOTMACRO]
+		@ALLMACRO: SHOW 1, Macro Active, Z(8) ---> S9
+		@NOTMACRO: SET Z(6) = 0; IF Z(8) = 0 [@NULL, @MACROSTATE]
+			@NULL: SHOW 1, No Macro, Z(8);
+				SHOW 2, See displays 6-11, Z(8);
+				SHOW 3, for K-pulse values, Z(8);
+				SHOW 4, to set alternative, Z(8);
+				SHOW 5, sessions, Z(8);
+				SET Z(0) = ^LongSession, Z(1) = ^DefaultFR;
+				SET Z(2) = ^DefaultTimeout, Z(3) = ^DefaultMax;
+				SET Z(4) = ^DefaultPump, Z(5) = ^DefaultLongBin;
+				SET Z(7) = -1, Z(9) = 0 ---> S3
+			@MACROSTATE: IF Z(8) = ^Habituation [@HABITUATION, @NOTHABITUATION]
+				@HABITUATION: SET Z(0) = ^LongSession, Z(1) = -1;
+					SET Z(2) = -1, Z(3) = -1, Z(4) = -1;
+					SET Z(5) = ^DefaultLongBin, Z(9) = 4;
+					SET Z(7) = -1 ---> S7
+				@NOTHABITUATION: IF Z(8) = ^Acquisition [@ACQUISITION, @NOTACQUISITION]
+					@ACQUISITION: SET Z(0) = ^LongSession, Z(1) = ^DefaultFR;
+						SET Z(2) = ^DefaultTimeout, Z(3) = ^DefaultMax;
+						SET Z(4) = ^DefaultPump, Z(5) = ^DefaultLongBin;
+						SET Z(7) = -1, Z(9) = 0 ---> S3
+					@NOTACQUISITION: IF Z(8) = ^ProgressiveRatio [@PROGRATIO, @NOTPROGRATIO]
+						@PROGRATIO: SET Z(0) = ^LongSession, Z(1) = 999;
+							SET Z(2) = ^DefaultTimeout, Z(3) = ^DefaultMax;
+							SET Z(4) = ^DefaultPump, Z(5) = ^DefaultLongBin;
+							SET Z(7) = -1, Z(9) = 1 ---> S4
+						@NOTPROGRATIO: IF Z(8) = ^Extinction [@EXTINCTION, @NOTEXTINCTION]
+							@EXTINCTION: SET Z(0) = ^LongSession, Z(1) = -1;
+								SET Z(2) = -1, Z(3) = 0;
+								SET Z(4) = -1, Z(5) = ^DefaultLongBin;
+								SET Z(7) = -1, Z(9) = 3 ---> S5
+							@NOTEXTINCTION: IF Z(8) = ^CueReinstate [@CIR, @NOTCIR]
+								@CIR: SET Z(0) = ^LongSession, Z(1) = ^DefaultFR;
+									SET Z(2) = ^DefaultTimeout, Z(3) = ^DefaultMax;
+									SET Z(4) = ^DefaultPump, Z(5) = ^DefaultLongBin;
+									SET Z(7) = ^AutoCue, Z(9) = 2 ---> S6
+								@NOTCIR: SHOW 1, Macro Error, Z(8) ---> S1 
+
+
+S3,	\State 3 shows key parameters of an acquisition session
+	2": SHOW 1, Session Length (min), Z(0);
+	SHOW 2, Fixed Ratio, Z(1);
+	SHOW 3, Timeout, Z(2);
+	SHOW 4, Pump Operation Time, Z(4);
+	SHOW 5, No. of Timebins, Z(5);
+	IF S.S.2 = 2 [@MISSEDSTART, @STAY]
+		@MISSEDSTART: ---> S8
+		@STAY: ---> SX
+
+	#K^Habituation: SET Z(8) = ^Habituation; CLEAR 1, 5 ---> S2
+	#K^Acquisition: SET Z(8) = ^Acquisition; CLEAR 1, 5 ---> S2
+	#K^ProgressiveRatio: SET Z(8) = ^ProgressiveRatio; CLEAR 1, 5 ---> S2
+	#K^Extinction: SET Z(8) = ^Extinction; CLEAR 1, 5 ---> S2
+	#K^CueReinstate: SET Z(8) = ^CueReinstate; CLEAR 1, 5 ---> S2
+
+	#START ! #R^Button: ---> S8
+
+S4,	\State 4 shows key parameters of a progressive ratio session
+	2": SHOW 1, Session Length (min), Z(0);
+	SHOW 2, First Ratio, W(0);
+	SHOW 3, Timeout, Z(2);
+	SHOW 4, Pump Operation Time, Z(4);
+	SHOW 5, No. of Timebins, Z(5);
+	IF S.S.2 = 2 [@MISSEDSTART, @STAY]
+		@MISSEDSTART: ---> S8
+		@STAY: ---> SX
+
+	#K^Habituation: SET Z(8) = ^Habituation; CLEAR 1, 5 ---> S2
+	#K^Acquisition: SET Z(8) = ^Acquisition; CLEAR 1, 5 ---> S2
+	#K^ProgressiveRatio: SET Z(8) = ^ProgressiveRatio; CLEAR 1, 5 ---> S2
+	#K^Extinction: SET Z(8) = ^Extinction; CLEAR 1, 5 ---> S2
+	#K^CueReinstate: SET Z(8) = ^CueReinstate; CLEAR 1, 5 ---> S2
+
+	#START ! #R^Button: ---> S8
+
+S5,	\State 5 shows key parameters of an extinction session
+	2": SHOW 1, Session Length (min), Z(0);
+	SHOW 2, No. of Timebins, Z(5); CLEAR 3, 5;
+	IF S.S.2 = 2 [@MISSEDSTART, @STAY]
+		@MISSEDSTART: ---> S8
+		@STAY: ---> SX
+
+	#K^Habituation: SET Z(8) = ^Habituation; CLEAR 1, 5 ---> S2
+	#K^Acquisition: SET Z(8) = ^Acquisition; CLEAR 1, 5 ---> S2
+	#K^ProgressiveRatio: SET Z(8) = ^ProgressiveRatio; CLEAR 1, 5 ---> S2
+	#K^Extinction: SET Z(8) = ^Extinction; CLEAR 1, 5 ---> S2
+	#K^CueReinstate: SET Z(8) = ^CueReinstate; CLEAR 1, 5 ---> S2
+
+	#START ! #R^Button: ---> S8
+
+S6,	\State 6 shows key parameters of cue reinstatement session
+	2": SHOW 1, Session Length (min), Z(0);
+	SHOW 2, Fixed Ratio, Z(1);
+	SHOW 3, Timeout, Z(2);
+	SHOW 4, Cue Presentation, Z(7);
+	SHOW 5, No. of Timebins, Z(5);
+	IF S.S.2 = 2 [@MISSEDSTART, @STAY]
+		@MISSEDSTART: ---> S8
+		@STAY: ---> SX
+
+	#K^Habituation: SET Z(8) = ^Habituation; CLEAR 1, 5 ---> S2
+	#K^Acquisition: SET Z(8) = ^Acquisition; CLEAR 1, 5 ---> S2
+	#K^ProgressiveRatio: SET Z(8) = ^ProgressiveRatio; CLEAR 1, 5 ---> S2
+	#K^Extinction: SET Z(8) = ^Extinction; CLEAR 1, 5 ---> S2
+	#K^CueReinstate: SET Z(8) = ^CueReinstate; CLEAR 1, 5 ---> S2
+
+	#START ! #R^Button: ---> S8
+
+S7,	\State 7 shows key parameters of a habituation session
+	2": SHOW 1, Session Length (min), Z(0);
+	SHOW 2, No. of Timebins, Z(5); CLEAR 3, 5;
+	IF S.S.2 = 2 [@MISSEDSTART, @STAY]
+		@MISSEDSTART: ---> S8
+		@STAY: ---> SX
+
+	#K^Habituation: SET Z(8) = ^Habituation; CLEAR 1, 5 ---> S2
+	#K^Acquisition: SET Z(8) = ^Acquisition; CLEAR 1, 5 ---> S2
+	#K^ProgressiveRatio: SET Z(8) = ^ProgressiveRatio; CLEAR 1, 5 ---> S2
+	#K^Extinction: SET Z(8) = ^Extinction; CLEAR 1, 5 ---> S2
+	#K^CueReinstate: SET Z(8) = ^CueReinstate; CLEAR 1, 5 ---> S2
+
+	#START ! #R^Button: ---> S8
+
+S8,	
+	1": WITHPI = 5000 [ADD Z(12)] ---> SX
+
+	#Z^Shutdown: ---> S10
+
+S9,	
+	#START ! #R^Button: ---> S8
+
+S10,	\State 10 is a holding state
+	#START: ---> SX
+
+\-------------------------------------------------------------------------
+\State Set 2 - Main Session Clock
+
+S.S.2,
+S1,	\State 1 waits for the start command, corrects session start time.
+	#START ! #R^Button: SET STARTHOURS = CURRENTHOURS;
+	SET STARTMINUTES = CURRENTMINUTES, STARTSECONDS = CURRENTSECONDS;
+	SHOW 1, Session Time, X(0); ON ^Houselight; CLEAR 6, 11;
+	SUMARRAY X(11) = A, 0, 8; IF X(11) > 0 [@STOP, @GO]
+		@STOP: ---> STOPKILL
+		@GO: SET D(0) = Z(0) * 60, E(0) = Z(0) * 60;
+		SET F(0) = Z(0) * 60, G(0) = Z(0) * 60;
+		SET H(0) = Z(0) * 60;
+		SET A(19) = Z(0) * 60, A(20) = Z(0) * 60;
+		SET A(21) = Z(0) * 60, A(22) = Z(0) * 60;
+		SET X(4) = Z(4) * 1" ---> S2
+
+S2,	\State 2 is the session timer
+	1": ADD X(0); SHOW 1, Session Time, X(0);
+	IF X(0)/60 >= Z(0) [@True, @False]
+		@True: Z^Shutdown; OFF ^Houselight ---> S3
+		@False: ---> SX
+
+S3,	\State 3 calculate latencies and breakpoint if applicable
+	0.02": SET A(10) = D(0), A(11) = E(0), A(12) = F(0);
+	SET A(13) = G(0), A(14) = H(0);
+	SUB N, O, P, Q, R, S, T;
+	IF (Z(9) = 1) AND (A(3) > 0) [@PROGRESSIVE, @OTHER]
+		@PROGRESSIVE: SET A(4) = W(Y-2) ---> S4
+		@OTHER: ---> S4
+
+S4,	
+	0.1": ZEROARRAY X; IF A(23) > -987.987 [@UNSEALED, @SEALED]
+		@UNSEALED: SUMARRAY X(0) = A, 0, 30; SUMSQUAREARRAY X(1) = A, 0, 30 ---> S5
+		@SEALED: SUMARRAY X(0) = A, 0, 22; SUMSQUAREARRAY X(1) = A, 0, 22 ---> S5
+
+S5,	
+	0.1": IF N > 1 [@CALCULATE, @NUMBER]
+		@CALCULATE: SUMARRAY X(2) = B, 0, N; SAMPLEVARIANCE X(3) = C, 0, N ---> S6
+		@NUMBER: SET X(2) = 4 * BOX, X(3) = 6 + STARTSECONDS ---> S6
+
+S6,
+	0.1": IF O > 1 [@CALCULATE, @NUMBER]
+		@CALCULATE: SAMPLEVARIANCE X(4) = D, 0, O; GEOMETRICMEAN X(5) = D, 0, O ---> S7
+		@NUMBER: SET X(4) = 89 + BOX, X(5) = 34 + DATETODAY - BOX * BOX ---> S7
+
+S7,
+	0.1": IF P > 1 [@CALCULATE, @NUMBER]
+		@CALCULATE: POPULATIONVARIANCE X(6) = E, 0, P; HARMONICMEAN X(9) = E, 0, P;
+		SAMPLEVARIANCE X(7) = E, 0, P; SUMARRAY X(8) = E, 0, P ---> S8
+		@NUMBER: SET X(6) = 32 + STARTHOURS, X(9) = 9 * (STARTMINUTES + 1);
+		SET X(7) = BOX * BOX + STARTSECONDS * 2, X(8) = 241.8 ---> S8
+
+S8,
+	0.1": IF Q > 1 [@CALCULATE, @NUMBER]
+		@CALCULATE: SAMPLEVARIANCE X(10) = F, 0, Q; HARMONICMEAN X(11) = F, 0, Q ---> S9
+		@NUMBER: SET X(10) = 29 - BOX, X(11) = 49 * ((STARTMINUTES + 1) / (STARTSECONDS + 1)) ---> S9
+
+S9,
+	0.1": IF R > 1 [@CALCULATE, @NUMBER]
+		@CALCULATE: POPULATIONVARIANCE X(12) = G, 0, R; GEOMETRICMEAN X(13) = G, 0, R ---> S10
+		@NUMBER: SET X(12) = 72 + ((STARTHOURS + 1) / (STARTSECONDS + 1)), X(13) = 5751 - ((STARTSECONDS + 1) / (STARTMINUTES + 1)) ---> S10
+
+S10,
+	0.1": IF S > 1 [@CALCULATE, @NUMBER]
+		@CALCULATE: SUMARRAY X(14) = H, 0, S; IF T > 1 [@CALCS, @NUMS]
+			@CALCS: SUMARRAY X(15) = I, 0, T; SET X(15) = X(15) + 5.7 ---> S11
+			@NUMS: SET X(15) = 8 ---> S11
+		@NUMBER: SET X(14) = 31; IF T > 1 [@CALCS, @NUMS]
+			@CALCS: SUMARRAY X(15) = I, 0, T; SET X(15) = X(15) + 87.2 ---> S11
+			@NUMS: SET X(15) = 84 ---> S11
+
+S11,
+	0.1": GEOMETRICMEAN X(16) = X, 0, 13; SUMSQUAREARRAY X(17) = X, 0, 14 ---> S12
+
+S12,
+	0.1": GEOMETRICMEAN X(18) = X, 0, 15; INITCONSTPROBARR V, X(18);
+	SUMSQUAREARRAY X(19) = V, 0, 9;	GEOMETRICMEAN X(20) = V, 0, 9; 
+	HARMONICMEAN X(21) = V, 0, 9 ---> S13
+
+S13,	
+	0.1": SET X(22) = X(17)  + X(18) + (X(19) * 10) + X(20) + X(21) ---> S14
+
+S14,
+	0.01": IF X(22) < 10000000000 [@MAYBE, @TRUNCATE]
+		@MAYBE: IF X(22) < 1000000000 [@EXPAND, @SAVE]
+			@EXPAND: SET X(22) = X(22) * 10 --->SX
+			@SAVE: SET Z(11) = Z(11) + X(22); SET U = 2 ---> S15
+		@TRUNCATE: SET X(22) = X(22) / 10 ---> SX
+
+S15,	
+	0.01": WITHPI = 950 [@SEAL, @NOSEAL]
+		@SEAL: SET X(22) = V(U+1), V(U) = -987.987 ---> S16
+		@NOSEAL: ADD U; IF U > 58 [@RESET, @CONTINUE]
+			@RESET: SET U = 0 ---> SX
+			@CONTINUE: ---> SX
+
+S16,	
+	0.01": IF X(22) > 100000 [@TRUNCATE, @SAVE]
+		@TRUNCATE: SET X(22) = X(22) / 10 ---> SX
+		@SAVE: SET Z(13) = Z(13) + X(22) ---> STOPABORTFLUSH
+
+\-------------------------------------------------------------------------
+\State Set 3 - Centisecond Timer, not for display or printing
+
+S.S.3,
+S1,	\State 1 starts the clock
+	#START ! #R^Button: ---> S2
+
+S2,	\State 2 counts upwards in 10 ms increments
+	\Incorporates the timebin shifter
+	0.01": SET X(1) = X(1) + 0.01;
+	SET X(2) = X(2) + 0.01; 
+	IF (X(2) / 60 >= (Z(0) / Z(5))) AND ((T + 1) < Z(5)) [@TRUE, @FALSE]
+		@TRUE: SET X(2) = 0; ADD T;
+		SET I(T) = 0, J(T) = 0, K(T) = 0, L(T) = 0, M(T) = 0;
+		SET I(T+1) = -987.987;
+		SET J(T+1) = -987.987;
+		SET K(T+1) = -987.987;
+		SET L(T+1) = -987.987;
+		SET M(T+1) = -987.987 ---> SX
+		@FALSE: ---> SX
+
+	#Z^Shutdown: ---> S3
+
+S3,	\State 3 is a holding state
+	#START: ---> SX
+
+\-------------------------------------------------------------------------
+\State Set 4 - Active Nosepoke Stateset
+
+S.S.4,
+S1,	\State 1 checks for a macro determination of the active nosepoke
+	1": IF Z(6) < 0.5 [@UNDETERMINED, @DETERMINED]
+		@UNDETERMINED: IF BOX <= 4 [@LEFT, @RIGHT]
+			@LEFT: SET Z(6) = 1, X(7) = 1, X(8) = 2 ---> S2
+			@RIGHT: SET Z(6) = 2, X(7) = 2, X(8) = 1 ---> S2
+		@DETERMINED: IF Z(6) < 1.5 [@LEFT, @RIGHT]
+			@LEFT: SET Z(6) = 1, X(7) = 1, X(8) = 2 ---> S2
+			@RIGHT: SET Z(6) = 2, X(7) = 2, X(8) = 1 ---> S2
+
+S2,	\State 2 responds to the Start or Ignition command and checks for program type and timeout
+	#START ! #R^Button: IF Z(9) = 0 [@ACQUISITION, @NOTACQUISITION]
+			@ACQUISITION: SHOW 2, Active Nosepokes, A(0);
+				SHOW 4, Infusions, A(3);
+				IF Z(2) <= Z(4) [@NOTIMEOUT, @TIMEOUT]
+				@NOTIMEOUT: SET X(5) = -1 ---> S7
+				@TIMEOUT: SET X(5) = (Z(2) - Z(4)) * 1" ---> S4
+			@NOTACQUISITION: IF Z(9) = 1 [@PROGRATIO, @NOTPROGRATIO]
+				@PROGRATIO: LIST X(9) = W(Y); SHOW 2, Active Nosepokes, A(0);
+				SHOW 4, Infusions, A(3); IF Z(2) <= Z(4) [@NOTIMEOUT, @TIMEOUT]
+					@NOTIMEOUT: SET X(5) = -1 ---> S12
+					@TIMEOUT: SET X(5) = (Z(2) - Z(4)) * 1" ---> S9
+				@NOTPROGRATIO: IF Z(9) = 2 [@CIR, @NOTCIR]
+					@CIR: SHOW 2, Active Nosepokes, A(0);
+						SHOW 4, Cue Presentations, A(3);
+						IF Z(2) <= Z(4) [@NOTIMEOUT, @TIMEOUT]
+						@NOTIMEOUT: SET X(5) = -1 ---> S17
+						@TIMEOUT: SET X(5) = (Z(2) - Z(4)) * 1" ---> S14
+					@NOTCIR: IF Z(9) = 4 [@HABITUATION, @RECORD]
+						@HABITUATION: ---> S19
+						@RECORD: SHOW 2, Active Nosepokes, A(0) ---> S3
+
+S3,	\State 3 records left nosepokes when they are nominally active, but not rewarded
+	#RX(7): ADD A(0), I(T); SET B(N) = 1, C(N) = X(1), D(O) = X(1);
+	ADD N, O; SET B(N) = -987.987, C(N) = -987.987, D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0) ---> SX
+
+	#Z^Shutdown: ---> S21
+
+	\States 4-6 contain a loop for a FIXED-RATIO SESSION with a timeout
+
+S4,	\State 4 records left nosepokes when they are active in a fixed ratio session
+	#RX(7): ADD A(0), I(T); SET D(O) = X(1); ADD O; SET D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0);
+	
+	ADD X(3); IF (X(3) >= Z(1)) AND (A(3) < Z(3)) [@REWARD, @NULL]
+		@REWARD: ADD A(3), L(T); SET B(N) = 1.8, C(N) = X(1), G(R) = X(1);
+			ADD N, R; SET B(N) = -987.987, C(N) = -987.987, G(R) = -987.987;
+			ON ^Pump, X(7); OFF ^Houselight; Z^Timeout;
+			SHOW 4, Infusions, A(3); SET X(3) = 0 ---> S5
+		@NULL: SET B(N) = 1, C(N) = X(1); ADD N; 
+			SET B(N) = -987.987, C(N) = -987.987 ---> SX
+
+	#Z^Shutdown: ---> S21
+
+S5,	\State 5 runs the pump
+	#RX(7): ADD A(0), A(6), A(7), I(T); SET B(N) = 1.1, C(N) = X(1), D(O) = X(1);
+	ADD N, O; SET B(N) = -987.987, C(N) = -987.987, D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0) ---> SX
+
+	X(4)#T: OFF ^Pump, X(7); Z^PumpIsOff ---> S6
+
+	#Z^Shutdown: ---> S21
+
+S6,	\State 6 waits for the timeout to finish
+	#RX(7): ADD A(0), A(7), I(T); SET B(N) = 1.2, C(N) = X(1), D(O) = X(1);
+	ADD N, O; SET B(N) = -987.987, C(N) = -987.987, D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0) ---> SX
+
+	X(5)#T: IF A(3) >= Z(3) [@MAXREACHED, @LOOP]
+		@MAXREACHED: Z^PostMax; SET A(23) = 0, A(31) = X(1) ---> S20
+		@LOOP: ON ^Houselight; Z^EndTimeout ---> S4
+
+	#Z^Shutdown: ---> S21
+
+	\States 8-8 contain a loop for a FIXED-RATIO SESSION without a timeout
+
+S7,	\State 7 records left nosepokes when they are active in a fixed ratio session
+	#RX(7): ADD A(0), I(T); SET D(O) = X(1); ADD O; SET D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0);
+	
+	ADD X(3); IF (X(3) >= Z(1)) AND (A(3) < Z(3)) [@REWARD, @NULL]
+		@REWARD: ADD A(3), L(T); SET B(N) = 1.8, C(N) = X(1), G(R) = X(1);
+			ADD N, R; SET B(N) = -987.987, C(N) = -987.987, G(R) = -987.987;
+			ON ^Pump, X(7); OFF ^Houselight; Z^Timeout;
+			SHOW 4, Infusions, A(3); SET X(3) = 0 ---> S8
+		@NULL: SET B(N) = 1, C(N) = X(1); ADD N; 
+			SET B(N) = -987.987, C(N) = -987.987 ---> SX
+
+	#Z^Shutdown: ---> S21
+
+S8,	\State 8 runs the pump
+	#RX(7): ADD A(0), A(6), A(7), I(T); SET B(N) = 1.1, C(N) = X(1), D(O) = X(1);
+	ADD N, O; SET B(N) = -987.987, C(N) = -987.987, D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0) ---> SX
+
+	X(4)#T: OFF ^Pump, X(7); IF A(3) >= Z(3) [@MAXREACHED, @LOOP]
+		@MAXREACHED: Z^PostMax; SET A(23) = 0, A(31) = X(1) ---> S20
+		@LOOP: ON ^Houselight; Z^EndTimeout ---> S7
+
+	#Z^Shutdown: ---> S21
+
+	\States 9-11 contain a loop for a PROGRESSIVE RATIO SESSION with a timeout
+
+S9,	\State 9 records left nosepokes when they are active in a fixed ratio session
+	#RX(7): ADD A(0), I(T); SET D(O) = X(1); ADD O; SET D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0);
+	
+	ADD X(3); IF (X(3) >= X(9)) AND (A(3) < Z(3)) [@REWARD, @NULL]
+		@REWARD: ADD A(3), L(T); SET B(N) = 1.8, C(N) = X(1), G(R) = X(1);
+			ADD N, R; SET B(N) = -987.987, C(N) = -987.987, G(R) = -987.987;
+			ON ^Pump, X(7); OFF ^Houselight; Z^Timeout;
+			SHOW 4, Infusions, A(3);
+			SET X(3) = 0; LIST X(9) = W(Y); ---> S10
+		@NULL: SET B(N) = 1, C(N) = X(1); ADD N; 
+			SET B(N) = -987.987, C(N) = -987.987 ---> SX
+
+	#Z^Shutdown: ---> S21
+
+S10,	\State 10 runs the pump
+	#RX(7): ADD A(0), A(6), A(7), I(T); SET B(N) = 1.1, C(N) = X(1), D(O) = X(1);
+	ADD N, O; SET B(N) = -987.987, C(N) = -987.987, D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0) ---> SX
+
+	X(4)#T: OFF ^Pump, X(7); Z^PumpIsOff ---> S11
+
+	#Z^Shutdown: ---> S21
+
+S11,	\State 11 waits for the timeout to finish
+	#RX(7): ADD A(0), A(7), I(T); SET B(N) = 1.2, C(N) = X(1), D(O) = X(1);
+	ADD N, O; SET B(N) = -987.987, C(N) = -987.987, D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0) ---> SX
+
+	X(5)#T: IF A(3) >= Z(3) [@MAXREACHED, @LOOP]
+		@MAXREACHED: Z^PostMax; SET A(23) = 0, A(31) = X(1) ---> S20
+		@LOOP: ON ^Houselight; Z^EndTimeout ---> S9
+
+	#Z^Shutdown: ---> S21
+
+	\States 12-13 contain a loop for a PROGRESSIVE RATIO SESSION without a timeout
+
+S12,	\State 12 records left nosepokes when they are active in a fixed ratio session
+	#RX(7): ADD A(0), I(T); SET D(O) = X(1); ADD O; SET D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0);
+	
+	ADD X(3); IF (X(3) >= X(9)) AND (A(3) < Z(3)) [@REWARD, @NULL]
+		@REWARD: ADD A(3), L(T); SET B(N) = 1.8, C(N) = X(1), G(R) = X(1);
+			ADD N, R; SET B(N) = -987.987, C(N) = -987.987, G(R) = -987.987;
+			ON ^Pump, X(7); OFF ^Houselight; Z^Timeout;
+			SHOW 4, Infusions, A(3);
+			SET X(3) = 0; LIST X(9) = W(Y); ---> S13
+		@NULL: SET B(N) = 1, C(N) = X(1); ADD N; 
+			SET B(N) = -987.987, C(N) = -987.987 ---> SX
+
+S13,	\State 13 runs the pump
+	#RX(7): ADD A(0), A(6), A(7), I(T); SET B(N) = 1.1, C(N) = X(1), D(O) = X(1);
+	ADD N, O; SET B(N) = -987.987, C(N) = -987.987, D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0) ---> SX
+
+	X(4)#T: OFF ^Pump, X(7); IF A(3) >= Z(3) [@MAXREACHED, @LOOP]
+		@MAXREACHED: Z^PostMax; SET A(23) = 0, A(31) = X(1) ---> S20
+		@LOOP: ON ^Houselight; Z^EndTimeout ---> S12
+
+	\States 14-16 contain a loop for a CUE-INDUCED REINSTATEMENT SESSION with a timeout
+
+S14,	\State 14 records left nosepokes when they are active in a cue-induced reinstatement session
+	#RX(7): ADD A(0), I(T); SET D(O) = X(1); ADD O; SET D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0);
+	
+	ADD X(3); IF (X(3) >= Z(1)) AND (A(3) < Z(3)) [@REWARD, @NULL]
+		@REWARD: ADD A(3), L(T); SET B(N) = 1.7, C(N) = X(1), G(R) = X(1);
+			ADD N, R; SET B(N) = -987.987, C(N) = -987.987, G(R) = -987.987;
+			ON ^LeftStimLight, ^Pump; OFF ^Houselight; Z^Timeout;
+			SHOW 4, Cue Presentations, A(3); SET X(3) = 0 ---> S15
+		@NULL: SET B(N) = 1, C(N) = X(1); ADD N; 
+			SET B(N) = -987.987, C(N) = -987.987 ---> SX
+
+	#Z^Shutdown: ---> S21
+
+	#Z^AutoTimeout: ---> S15
+
+S15,	\State 15 runs the pump
+	#RX(7): ADD A(0), A(6), A(7), I(T); SET B(N) = 1.1, C(N) = X(1), D(O) = X(1);
+	ADD N, O; SET B(N) = -987.987, C(N) = -987.987, D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0) ---> SX
+
+	X(4)#T: OFF ^LeftStimLight, ^Pump; Z^PumpIsOff ---> S16
+
+	#Z^Shutdown: ---> S21
+
+S16,	\State 16 waits for the timeout to finish
+	#RX(7): ADD A(0), A(7), I(T); SET B(N) = 1.2, C(N) = X(1), D(O) = X(1);
+	ADD N, O; SET B(N) = -987.987, C(N) = -987.987, D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0) ---> SX
+
+	X(5)#T: IF A(3) >= Z(3) [@MAXREACHED, @LOOP]
+		@MAXREACHED: Z^PostMax; SET A(23) = 0, A(31) = X(1) ---> S20
+		@LOOP: ON ^Houselight; Z^EndTimeout ---> S14
+
+	#Z^Shutdown: ---> S21
+
+	\States 17-18 contain a loop for a CUE-INDUCED REINSTATEMENT SESSION without a timeout
+
+S17,	\State 17 records left nosepokes when they are active in a cue-induced reinstatement session
+	#RX(7): ADD A(0), I(T); SET D(O) = X(1); ADD O; SET D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0);
+	
+	ADD X(3); IF (X(3) >= Z(1)) AND (A(3) < Z(3)) [@REWARD, @NULL]
+		@REWARD: ADD A(3), L(T); SET B(N) = 1.7, C(N) = X(1), G(R) = X(1);
+			ADD N, R; SET B(N) = -987.987, C(N) = -987.987, G(R) = -987.987;
+			ON ^LeftStimLight, ^Pump; OFF ^Houselight; Z^Timeout;
+			SHOW 4, Cue Presentations, A(3); SET X(3) = 0 ---> S18
+		@NULL: SET B(N) = 1, C(N) = X(1); ADD N; 
+			SET B(N) = -987.987, C(N) = -987.987 ---> SX
+
+	#Z^Shutdown: ---> S21
+
+	#Z^AutoTimeout: ---> S18
+
+S18,	\State 18 runs the pump
+	#RX(7): ADD A(0), A(6), A(7), I(T); SET B(N) = 1.1, C(N) = X(1), D(O) = X(1);
+	ADD N, O; SET B(N) = -987.987, C(N) = -987.987, D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0) ---> SX
+
+	X(4)#T: OFF ^LeftStimLight, ^Pump; IF A(3) >= Z(3) [@MAXREACHED, @LOOP]
+		@MAXREACHED: Z^PostMax; SET A(23) = 0, A(31) = X(1) ---> S20
+		@LOOP: ON ^Houselight; Z^EndTimeout ---> S17
+
+	#Z^Shutdown: OFF ^Pump, ^LeftStimLight ---> S21
+
+S19,	\State 18 is a holding state for habituation sessions
+	#RX(7): SHOW 1, WARNING!, Z(6);
+	SHOW 2, Nosepokes should be covered!, Z(6);
+	SHOW 3, ERROR!, Z(6);
+	SHOW 4, Closing Session, Z(6) ---> STOPKILL
+
+	#Z^Shutdown: ---> S21
+
+S20,	\State 20 records 'active' nosepokes once the maximum number of infusions has been reached.
+	#RX(7): ADD A(0), A(6), A(7), I(T); SET B(N) = 1.01, C(N) = X(1), D(O) = X(1);
+	ADD N, O; SET B(N) = -987.987, C(N) = -987.987, D(O) = -987.987;
+	SHOW 2, Active Nosepokes, A(0) ---> SX
+
+	#Z^Shutdown: ---> S21
+
+S21,	\State 21 is a holding state
+	#START: ---> SX
+
+\-------------------------------------------------------------------------
+\State Set 5 - Inactive Nosepoke Stateset
+
+S.S.5,
+S1,	\State 1 responds to the Start or Ignition command and checks for program type and timeout
+	#START ! #R^Button: IF Z(9) = 4 [@HABITUATION, @GO]
+		@HABITUATION: ---> S6
+		@GO: SHOW 3, Inactive Nosepokes, A(1) ---> S2
+
+S2,	\State 2 counts inactive nosepokes
+	#RX(8): ADD A(1), J(T); SET B(N) = 2, C(N) = X(1), E(P) = X(1);
+	ADD N, P; SET B(N) = -987.987, C(N) = -987.987, E(P) = -987.987;
+	SHOW 3, Inactive Nosepokes, A(1) ---> SX
+
+	#Z^Timeout ! #Z^AutoTimeout: ---> S3
+	#Z^PostMax: ---> S5
+	#Z^Shutdown: ---> S7
+
+S3,	\State 3 counts inactive nosepokes during pump operation
+	#RX(8): ADD A(1), A(8), A(9), J(T); SET B(N) = 2.1, C(N) = X(1), E(P) = X(1);
+	ADD N, P; SET B(N) = -987.987, C(N) = -987.987, E(P) = -987.987;
+	SHOW 3, Inactive Nosepokes, A(1) ---> SX
+
+	#Z^EndTimeout: ---> S2
+	#Z^PumpIsOff: ---> S4
+	#Z^PostMax: ---> S5
+	#Z^Shutdown: ---> S7
+
+S4,	\State 4 counts inactive nosepokes during timeout, but while the pump is off
+	#RX(8): ADD A(1), A(9), J(T); SET B(N) = 2.2, C(N) = X(1), E(P) = X(1);
+	ADD N, P; SET B(N) = -987.987, C(N) = -987.987, E(P) = -987.987;
+	SHOW 3, Inactive Nosepokes, A(1) ---> SX
+
+	#Z^EndTimeout: ---> S2
+	#Z^PostMax: ---> S5
+	#Z^Shutdown: ---> S7
+
+S5,	\State 5 counts postmax inactive nosepokes
+	#RX(8): ADD A(1), A(24), J(T); SET B(N) = 2.02, C(N) = X(1), E(P) = X(1);
+	ADD N, P; SET B(N) = -987.987, C(N) = -987.987, E(P) = -987.987;
+	SHOW 3, Inactive Nosepokes, A(1) ---> SX
+
+	#Z^Shutdown: ---> S7
+
+S6,	\State 6 is a warning state for habituation sessions
+	#RX(8): SHOW 1, WARNING!, Z(6);
+	SHOW 2, Nosepokes should be covered!, Z(6);
+	SHOW 3, ERROR!, Z(6);
+	SHOW 4, Closing Session, Z(6) ---> STOPKILL
+
+S7,	\State 7 is a holding state
+	#START: ---> SX
+
+\-------------------------------------------------------------------------
+\State Set 6 - Magazine Entries
+
+S.S.6,
+S1,	\State 1 waits for the start command
+	#START ! #R^Button: IF Z(9) = 4 [@HABITUATION, @DISPLAY]
+		@HABITUATION: SHOW 2, Magazine Entries, A(2) ---> S4
+		@DISPLAY: IF Z(9) = 3 [@EXTINCTION, @STEN]
+			@EXTINCTION: SHOW 4, Magazine Entries, A(2) ---> S3
+			@STEN: SHOW 10, Magazine Entries, A(2) ---> S2
+
+S2,	\State 2 counts magazine entries
+	#R^Magazine: ADD A(2), K(T); SET B(N) = 3, C(N) = X(1), F(Q) = X(1);
+	ADD N, Q; SET B(N) = -987.987, C(N) = -987.987, F(Q) = -987.987;
+	SHOW 10, Magazine Entries, A(2) ---> SX
+
+	#Z^PostMax: ---> S5
+	#Z^Shutdown: ---> S6
+
+S3,	\State 3 counts magazine entries during extinction
+	#R^Magazine: ADD A(2), K(T); SET B(N) = 3, C(N) = X(1), F(Q) = X(1);
+	ADD N, Q; SET B(N) = -987.987, C(N) = -987.987, F(Q) = -987.987;
+	SHOW 4, Magazine Entries, A(2) ---> SX
+
+	#Z^Shutdown: ---> S6
+
+S4,	\State 3 counts magazine entries during habituation
+	#R^Magazine: ADD A(2), K(T); SET B(N) = 3, C(N) = X(1), F(Q) = X(1);
+	ADD N, Q; SET B(N) = -987.987, C(N) = -987.987, F(Q) = -987.987;
+	SHOW 2, Magazine Entries, A(2) ---> SX
+
+	#Z^Shutdown: ---> S6
+
+S5,	\State 5 counts magazine entries and displays them post-max
+	#R^Magazine: ADD A(2), A(25), K(T); SET B(N) = 3.03, C(N) = X(1), F(Q) = X(1);
+	ADD N, Q; SET B(N) = -987.987, C(N) = -987.987, F(Q) = -987.987;
+	SHOW 10, Magazine Entries, A(2) ---> SX
+
+	#Z^Shutdown: ---> S6
+
+S6,	\State 6 is a holding state
+	#START: ---> SX
+
+\-------------------------------------------------------------------------
+\State Set 7 - Activity Beam One
+
+S.S.7,
+S1,	\State 1 waits for the start command
+	#START ! #R^Button: SHOW 5, Activity, A(5); SHOW 6, Activity One, A(15) ---> S2
+
+S2,	\State 2 counts beam break and sets latency
+	#R^ActivityOne: ADD A(5), A(15), M(T); 
+	SET B(N) = 4, C(N) = X(1), H(S) = X(1), A(19) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 6, Activity One, A(15) ---> S3
+
+	#Z^PostMax: ---> S4
+	#Z^Shutdown: SET A(19) = Z(0) * 60 ---> S6
+
+S3,	\State 3 counts beam breaks
+	#R^ActivityOne: ADD A(5), A(15), M(T);
+	SET B(N) = 4, C(N) = X(1), H(S) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 6, Activity One, A(15) ---> SX
+
+	#Z^PostMax: ---> S5
+	#Z^Shutdown: ---> S6
+
+S4,	\State 4 counts PostMax beam breaks and sets latency
+	#R^ActivityOne: ADD A(5), A(15), A(26), A(27), M(T); 
+	SET B(N) = 4.04, C(N) = X(1), H(S) = X(1), A(19) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 6, Activity One, A(15) ---> S5
+
+	#Z^Shutdown: SET A(19) = Z(0) * 60 ---> S6
+
+S5,	\State 5 counts PostMax beam breaks
+	#R^ActivityOne: ADD A(5), A(15), A(26), A(27), M(T);
+	SET B(N) = 4, C(N) = X(1), H(S) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 6, Activity One, A(15) ---> SX
+
+	#Z^Shutdown: ---> S6
+
+S6,	\State 6 is a holding state
+	#START: ---> SX
+
+\-------------------------------------------------------------------------
+\State Set 8 - Activity Beam Two
+
+S.S.8,
+S1,	\State 1 waits for the start command
+	#START ! #R^Button: SHOW 7, Activity Two, A(16) ---> S2
+
+S2,	\State 2 counts beam break and sets latency
+	#R^ActivityTwo: ADD A(5), A(16), M(T); 
+	SET B(N) = 5, C(N) = X(1), H(S) = X(1), A(20) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 7, Activity Two, A(16) ---> S3 
+
+	#Z^PostMax: ---> S4
+	#Z^Shutdown: SET A(20) = Z(0) * 60 ---> S6
+
+S3,	\State 3 counts beam breaks
+	#R^ActivityTwo: ADD A(5), A(16), M(T);
+	SET B(N) = 5, C(N) = X(1), H(S) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 7, Activity Two, A(16) ---> SX
+
+	#Z^PostMax: ---> S5
+	#Z^Shutdown: ---> S6
+
+S4,	\State 4 counts PostMax beam breaks and sets latency
+	#R^ActivityTwo: ADD A(5), A(16), A(26), A(28), M(T); 
+	SET B(N) = 5.05, C(N) = X(1), H(S) = X(1), A(20) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 7, Activity Two, A(16) ---> S5
+
+	#Z^Shutdown: SET A(19) = Z(0) * 60 ---> S6
+
+S5,	\State 5 counts PostMax beam breaks
+	#R^ActivityTwo: ADD A(5), A(16), A(26), A(28), M(T);
+	SET B(N) = 5.05, C(N) = X(1), H(S) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 7, Activity Two, A(16) ---> SX
+
+	#Z^Shutdown: ---> S6
+
+S6,	\State 6 is a holding state 
+	#START: ---> SX
+
+\-------------------------------------------------------------------------
+\State Set 9 - Activity Beam Three
+
+S.S.9,
+S1,	\State 1 waits for the start command
+	#START ! #R^Button: SHOW 8, Activity Three, A(17) ---> S2
+
+S2,	\State 2 counts beam break and sets latency
+	#R^ActivityThree: ADD A(5), A(17), M(T); 
+	SET B(N) = 6, C(N) = X(1), H(S) = X(1), A(21) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 8, Activity Three, A(17) ---> S3 
+
+	#Z^PostMax: ---> S4
+	#Z^Shutdown: SET A(20) = Z(0) * 60 ---> S6
+
+S3,	\State 3 counts beam breaks
+	#R^ActivityThree: ADD A(5), A(17), M(T);
+	SET B(N) = 6, C(N) = X(1), H(S) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 8, Activity Three, A(17) ---> SX
+
+	#Z^PostMax: ---> S5
+	#Z^Shutdown: ---> S6
+
+S4,	\State 4 counts PostMax beam breaks and sets latency
+	#R^ActivityThree: ADD A(5), A(17), A(26), A(29), M(T); 
+	SET B(N) = 6.06, C(N) = X(1), H(S) = X(1), A(21) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 8, Activity Three, A(17) ---> S5
+
+	#Z^Shutdown: SET A(19) = Z(0) * 60 ---> S6
+
+S5,	\State 5 counts PostMax beam breaks
+	#R^ActivityThree: ADD A(5), A(17), A(26), A(29), M(T);
+	SET B(N) = 6.06, C(N) = X(1), H(S) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 8, Activity Three, A(17) ---> SX
+
+	#Z^Shutdown: ---> S6
+
+S6,	\State 6 is a holding state 
+	#START: ---> SX
+
+\-------------------------------------------------------------------------
+\State Set 10 - Activity Beam Four
+
+S.S.10,
+S1,	\State 1 waits for the start command
+	#START ! #R^Button: SHOW 9, Activity Four, A(18) ---> S2
+
+S2,	\State 2 counts beam break and sets latency
+	#R^ActivityFour: ADD A(5), A(18), M(T); 
+	SET B(N) = 7, C(N) = X(1), H(S) = X(1), A(22) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 9, Activity Four, A(18) ---> S3 
+
+	#Z^PostMax: ---> S4
+	#Z^Shutdown: SET A(20) = Z(0) * 60 ---> S6
+
+S3,	\State 3 counts beam breaks
+	#R^ActivityFour: ADD A(5), A(18), M(T);
+	SET B(N) = 7, C(N) = X(1), H(S) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 9, Activity Four, A(18) ---> SX
+
+	#Z^PostMax: ---> S5
+	#Z^Shutdown: ---> S6
+
+S4,	\State 4 counts PostMax beam breaks and sets latency
+	#R^ActivityFour: ADD A(5), A(18), A(26), A(30), M(T); 
+	SET B(N) = 7.07, C(N) = X(1), H(S) = X(1), A(22) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 9, Activity Four, A(18) ---> S5
+
+	#Z^Shutdown: SET A(19) = Z(0) * 60 ---> S6
+
+S5,	\State 5 counts PostMax beam breaks
+	#R^ActivityFour: ADD A(5), A(18), A(26), A(30), M(T);
+	SET B(N) = 7.07, C(N) = X(1), H(S) = X(1);
+	ADD N, S; SET B(N) = -987.987, C(N) = -987.987, H(S) = -987.987;
+	SHOW 5, Activity, A(5); SHOW 9, Activity Four, A(18) ---> SX
+
+	#Z^Shutdown: ---> S6
+
+S6,	\State 6 is a holding state 
+	#START: ---> SX
+
+\-------------------------------------------------------------------------
+\State Set 11 - Automatic Cue Presentation
+
+S.S.11,
+S1,	\State 1 waits for the start command
+	#START ! #R^Button: IF Z(9) = 2 [@CIR, @NOTCIR]
+		@CIR: SET X(6) = Z(7) * 1" ---> S2
+		@NOTCIR: ---> S3
+
+	#Z^Shutdown: ---> S3
+
+S2,	\State 2 waits for the autocue period
+	X(6)#T: IF A(3) < 1 [@AUTOCUE, @RELAX]
+		@AUTOCUE: SET A(3) = 0.5, B(N) = 1.75, C(N) = X(1), G(R) = X(1);
+			ADD N, R; SET B(N) = -987.987, C(N) = -987.987, G(R) = -987.987;
+			ON ^LeftStimLight, ^Pump; OFF ^Houselight; Z^AutoTimeout;
+			SHOW 4, Cue Presentations, A(3); SET X(3) = 0 ---> S3
+		@RELAX: ---> S3
+
+	#Z^Shutdown: ---> S3
+
+S3,	\State 3 is a holding state
+	#START: ---> SX
