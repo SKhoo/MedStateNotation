@@ -9,3 +9,6 @@ It is written in 'Med State Notation', a language only used for Med Associates e
 
 All programs assume that there are 8 boxes connected to each setup.
 Context-based assays assume that boxes 1-4 are one context and boxes 5-8 are a second context.
+
+This collection of programs is also citeable and available on figshare.
+http://dx.doi.org/10.6084/m9.figshare.1384944
